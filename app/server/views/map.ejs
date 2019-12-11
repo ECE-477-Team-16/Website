@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Geocoding Service</title>
+    <!-- <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8"> -->
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+
+    <!-- <script src="js/jquery.js"></script>
+    <script src="js/moment.min.js"></script>  -->
+    <script src="/js/style/jquery-3.4.1.min.js"></script>
+    <script src="/js/style/moment.min.js"></script>
+    <script src="/js/style/combodate.js"></script>
+
+
+
+    <style>
+      /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+      #map {
+        height: 60%;
+        width: 100%;
+      }
+      /* Optional: Makes the sample page fill the window. */
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+    </style>
+  </head>
+
+
+  <body>
+    <div>
+    <h3>Wake Or Rip</h3>
+
+    <!-- <a class="btn btn-link" href="/home">Account Info</a> -->
+    <a class="btn btn-primary"  href="/logout">Logout</a>
+    </div>
+    <div id="map"></div>
+
+
+    <div class="container">
+      <br>
+
+      <div id="setLocation">
+        <button onclick="setLocation()" class="btn btn-primary" id="setLocationButton">Set Alarm Location as Current Location</button>
+      </div>
+
+      <div id="disableAlarm">
+        <button onclick="disable()" class="btn btn-primary" id="disableAlarmButton">Disable Alarm</button>
+        <p id="rippingTime">Time until ripping: </p>
+      </div>
+      <!-- <br> -->
+
+      <div id="timeDiv">
+        <div class="form-inline">
+          Alarm Time:
+          <input type="text" data-format="h:mm a" data-template="hh : mm a" name="datetime" value="12:59 am" id="datetime12">
+        </div>
+
+        <div class="form-inline">
+          Minutes before Ripping:
+          <select class="form-control" id='riptime'></select>​
+        </div>
+
+        <button onclick="setAlarm()" class="btn btn-primary" id="setAlarm">Set Alarm</button>
+      </div>
+
+      <div id="radiusDiv" class="form-inline">
+        Starting Location Radius (meters):
+        <input type="number" class="form-control" id="radius" value="100">
+      </div>
+
+    </div>
+
+
+    <script>
+
+    var select = '';
+    for (i=1;i<=60;i++){
+        select += '<option val=' + i + '>' + i + '</option>';
+    }
+    $('#riptime').html(select);
+
+    $(function(){
+        $('#datetime12').combodate({
+          //firstItem: 'name', //show 'hour' and 'minute' string at first item of dropdown
+          minuteStep: 1,
+          customClass: 'form-control'
+        });
+    });
+
+    </script>
+
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script>
+      var map, infoWindow, pos, circle, startingPos;
+
+      //var ripTime = 0;
+      //var radius = 100;
+
+      var mapCentered = 0;
+
+      var user = <%- JSON.stringify(udata) %>;
+      var startPos = {lat: user.lat, lng: user.long};
+      console.log(startPos);
+      console.log("current user");
+      console.log(user);
+
+      var radius = user.radius;
+      if(radius == null)
+        radius = 100;
+
+      var alarmState = user.alarmState; //0 = nothing set, 1 = starting location set, 2 = alarm set
+      if(alarmState == null) //if new account with no alarmState field
+        alarmState = 0;
+
+      console.log("alarmState: ", alarmState);
+
+      var locationSet = 0; //if red circle aleady displayed
+
+      function initMap() {
+        map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 15,
+          center: {lat: 40.4237, lng: -86.9212}
+        });
+
+        if(startPos.lat != null)
+          map.setCenter(startPos);
+
+
+        infoWindow = new google.maps.InfoWindow({disableAutoPan: true});
+        startingPos = new google.maps.InfoWindow;
+
+        if(alarmState == 0){
+          document.getElementById("disableAlarm").hidden = true;
+          document.getElementById("timeDiv").hidden = true;
+          document.getElementById("radiusDiv").hidden = false;
+          document.getElementById("setLocation").hidden = false;
+        }
+        else if(alarmState == 1){
+          startingPos.setPosition(startPos);
+          startingPos.setContent('Starting Location');
+          startingPos.open(map);
+
+
+          circle = new google.maps.Circle({
+            strokeColor: '#FF0000',
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: '#FF0000',
+            fillOpacity: 0.35,
+            map: map,
+            center: startPos,
+            radius: radius
+          });
+
+          console.log("circle drawn");
+
+          locationSet = 1;
+
+          document.getElementById("disableAlarm").hidden = true;
+          document.getElementById("timeDiv").hidden = false;
+          document.getElementById("radiusDiv").hidden = false;
+          document.getElementById("setLocation").hidden = false;
+        }
+        else{
+          startingPos.setPosition(startPos);
+          startingPos.setContent('Starting Location');
+          startingPos.open(map);
+
+          circle = new google.maps.Circle({
+            strokeColor: '#FF0000',
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: '#FF0000',
+            fillOpacity: 0.35,
+            map: map,
+            center: startPos,
+            radius: radius
+          });
+
+          console.log("circle drawn");
+
+          locationSet = 1;
+
+          document.getElementById("timeDiv").hidden = true;
+          document.getElementById("radiusDiv").hidden = true;
+          document.getElementById("setLocation").hidden = true;
+          document.getElementById("disableAlarm").hidden = false;
+        }
+
+      }
+
+      function getLocation() {
+        // Try HTML5 geolocation.
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(function(position) {
+            pos = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            };
+
+            //console.log(pos);
+
+            infoWindow.setPosition(pos);
+            infoWindow.setContent('You are here!');
+            infoWindow.open(map);
+            //console.log(mapCentered);
+            if(mapCentered == 0)
+              map.setCenter(pos);
+
+            mapCentered = 1;
+          }, function() {
+            handleLocationError(true, infoWindow, map.getCenter());
+          });
+        } else {
+          // Browser doesn't support Geolocation
+          handleLocationError(false, infoWindow, map.getCenter());
+        }
+      }
+
+      window.setInterval(function(){
+          getLocation();
+      }, 2000);
+
+
+
+
+      function handleLocationError(browserHasGeolocation, infoWindow, pos) {
+        infoWindow.setPosition(pos);
+        infoWindow.setContent(browserHasGeolocation ?
+                              'Error: The Geolocation service failed.' :
+                              'Error: Your browser doesn\'t support geolocation.');
+        infoWindow.open(map);
+      }
+
+
+      var socket = io();
+
+      function setLocation(){
+        alarmState = 1;
+        socket.emit('alarmState', {alarmState: alarmState, name: user.name});
+        console.log(document.getElementById("radius").value);
+        radius = parseInt(document.getElementById("radius").value);
+
+        //document.getElementById("setAlarm").style.visibility = "visible";
+        document.getElementById("radiusDiv").hidden = false;
+        document.getElementById("timeDiv").hidden = false;
+
+        //mark starting location
+        startPos = pos;
+        startingPos.setPosition(startPos);
+        startingPos.setContent('Starting Location');
+        startingPos.open(map);
+
+
+        if(locationSet == 1)
+          circle.setMap(null);
+
+        circle = new google.maps.Circle({
+          strokeColor: '#FF0000',
+          strokeOpacity: 0.8,
+          strokeWeight: 2,
+          fillColor: '#FF0000',
+          fillOpacity: 0.35,
+          map: map,
+          center: pos,
+          radius: radius
+        });
+
+        locationSet = 1;
+
+        console.log(pos);
+        socket.emit('storeLocation', {lat: pos.lat, long: pos.lng, name: user.name, radius: radius});
+
+      }
+
+      function rad(x) {
+        return x * Math.PI / 180;
+      };
+
+      function getDistance(){
+        var R = 6378137; // Earth’s mean radius in meter
+        var dLat = rad(pos.lat - startPos.lat);
+        var dLong = rad(pos.lng - startPos.lng);
+        var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(rad(startPos.lat)) * Math.cos(rad(pos.lat)) *
+          Math.sin(dLong / 2) * Math.sin(dLong / 2);
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        var d = R * c;
+        return d; // returns the distance in meter
+      }
+
+      function disable() {
+        distance = getDistance();
+        console.log("distance: ", distance);
+        socket.emit('sendDistance', distance);
+
+        if(distance > radius){
+        //if(distance > -5){
+          alarmState = 0;
+          circle.setMap(null);
+          startingPos.close();
+
+          socket.emit('alarmState', {alarmState: alarmState, name: user.name});
+
+          document.getElementById("radiusDiv").hidden = false;
+          document.getElementById("setLocation").hidden = false;
+          document.getElementById("disableAlarm").hidden = true;
+
+          socket.emit('sendData', 'Disable');
+        }
+      }
+
+      var check;
+      function setAlarm() {
+
+        alarmState = 2;
+        socket.emit('alarmState', {alarmState: alarmState, name: user.name});
+
+        //document.getElementById("setAlarm").style.visibility = "hidden";
+        document.getElementById("timeDiv").hidden = true;
+        document.getElementById("radiusDiv").hidden = true;
+        document.getElementById("setLocation").hidden = true;
+        document.getElementById("disableAlarm").hidden = false;
+
+
+        time = document.getElementById("datetime12").value;
+        ripTime = document.getElementById("riptime").value;
+
+        //displayRipTime = 60 * ripTime;
+
+
+        if(ripTime.length == 2)
+          ripTime = "0" + ripTime;
+        else if(ripTime.length == 1)
+          ripTime = "00" + ripTime;
+
+        var AMorPM, hour, minute;
+
+        if(time.charAt(1) === ":") {
+          AMorPM = time.substring(5,7);
+
+          hour = time.substring(0, 1);
+          minute = time.substring(2, 4);
+        }
+        else{
+          AMorPM = time.substring(6,8);
+
+          hour = time.substring(0, 2);
+          minute = time.substring(3, 5);
+        }
+
+        var minuteInt = parseInt(minute);
+        var ripAddition = parseInt(ripTime);
+
+        var totalMinute = minuteInt + ripAddition;
+
+
+        if(AMorPM === "pm") {
+          var hourInt = parseInt(hour);
+          console.log(hourInt);
+          hourInt += 12;
+          hour = hourInt.toString();
+
+          if(hour === "24")
+            hour = "12";
+        }
+        else {
+          if(hour === "12")
+            hour = "00";
+        }
+
+
+        if(hour.length === 1){
+          hour = "0" + hour;
+        }
+
+        var hourInt = parseInt(hour);
+        while(totalMinute >= 60){
+          totalMinute -= 60;
+          hourInt++;
+        }
+        totalMinute = totalMinute.toString();
+        hourInt = hourInt.toString();
+        if(totalMinute.length == 1)
+          totalMinute = "0" + totalMinute;
+        if(hourInt == "24")
+          hourInt = "0";
+
+        document.getElementById("rippingTime").innerHTML = "Ripping Time: " + hourInt + ":" + totalMinute;
+
+        check = window.setInterval(function(){
+            checkTime(hourInt, totalMinute);
+        }, 2000);
+
+        string = "T";
+        string += hour + minute + ripTime;
+
+        socket.emit('sendData', string);
+      }
+
+      function checkTime(hourInt, totalMinute){
+        var today = new Date();
+        var hour = today.getHours(); // => 9
+        var minute = today.getMinutes(); // =>  30
+        console.log(today);
+        //console.log("checkingTime");
+        if(hour == hourInt && minute == totalMinute){
+          alarmState = 0;
+          circle.setMap(null);
+          startingPos.close();
+
+          socket.emit('alarmState', {alarmState: alarmState, name: user.name});
+
+          document.getElementById("radiusDiv").hidden = false;
+          document.getElementById("setLocation").hidden = false;
+          document.getElementById("disableAlarm").hidden = true;
+
+          window.clearInterval(check);
+        }
+      }
+
+    </script>
+
+    <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAIoyVVw4cYM-qIiJIcvd7JwZhmZ05dj0k&callback=initMap">
+    </script>
+
+  </body>
+</html>

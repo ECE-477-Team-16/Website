@@ -1,0 +1,9 @@
+.DS_Store
+node_modules
+app/server/modules/email-settings-mine.js
+ESP32V1.cert.pem
+ESP32V1.private.key
+ESP32V1.public.key
+root-CA.crt
+server.cert
+server.key	
