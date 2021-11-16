@@ -15,7 +15,7 @@
     "async": "^3.1.0",
     "aws-iot-device-sdk": "^2.2.1",
     "aws-mqtt": "^1.0.0",
-    "aws-sdk": "^2.535.0",
+    "aws-sdk": "^2.814.0",
     "body-parser": "^1.18.3",
     "connect-mongo": "^2.0.1",
     "cookie-parser": "^1.4.3",
